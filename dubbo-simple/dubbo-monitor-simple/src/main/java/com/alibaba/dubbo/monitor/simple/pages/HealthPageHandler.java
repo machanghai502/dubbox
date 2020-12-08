@@ -6,6 +6,7 @@ import com.alibaba.dubbo.container.page.Page;
 import com.alibaba.dubbo.container.page.PageHandler;
 import com.alibaba.dubbo.monitor.simple.RegistryContainer;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -21,73 +22,59 @@ import java.util.Set;
 @Menu(name = "Health", desc = "Show health status.", order = 1000)
 public class HealthPageHandler implements PageHandler {
 
-    //private static Logger logger = LoggerFactory.getLogger(HealthPageHandler.class);
-
-    //private static Properties p = Properties.
-
     @Override
     public Page handle(URL url) {
-        List<String> sss = new ArrayList<String>();
+        JSONObject resultJsonObject = new JSONObject();
+        //Green=所有服务健康,Yellow=局部服务健康，Red=所有服务不健康
+        resultJsonObject.put("status", "Green");
+
+        List<String>  serviceKeyList = new ArrayList<String>();
+        List<String> healthyServiceList = new ArrayList<String>();
+        List<String> unHealthyServiceList = new ArrayList<String>();
+
         Properties properties = new Properties();
         try {
             InputStream resourceAsStream = this.getClass().getClassLoader().getResourceAsStream("META-INF/applications.properties");
             properties.load(resourceAsStream);
-            for (Object o : properties.keySet()) {
-                sss.add(o.toString());
-            }
-            for (Object value : properties.values()) {
-                sss.add(value.toString());
+            for (Object key : properties.keySet()) {
+                serviceKeyList.add(key.toString());
             }
         } catch (Exception ex) {
-            ex.printStackTrace();
+            System.out.println("加载服务配置文件失败:" + ex.getMessage());
         }
 
+        //从zk上获取所有的已注册的application
         Set<String> applications = RegistryContainer.getInstance().getApplications();
-        if (applications != null && applications.size() > 0) {
-            for (String application : applications) {
-                List<String> row = new ArrayList<String>();
-                row.add(application);
-
-                List<URL> providers = RegistryContainer.getInstance().getProvidersByApplication(application);
-                List<URL> consumers = RegistryContainer.getInstance().getConsumersByApplication(application);
-
-                if (providers != null && providers.size() > 0
-                        || consumers != null && consumers.size() > 0) {
-                    URL provider = (providers != null && providers.size() > 0 ? providers.iterator().next() : consumers.iterator().next());
-                    row.add(provider.getParameter("owner", "") + (provider.hasParameter("organization") ? " (" + provider.getParameter("organization") + ")" : ""));
-                } else {
-                    row.add("");
+        if (applications == null || applications.size() <= 0) {
+            resultJsonObject.put("status", "Yellow");
+        } else {
+            Set<Object> effectiveServices = properties.keySet();
+            for (Object effectiveService : effectiveServices) {
+                String effectiveServiceStr = effectiveService.toString();
+                if(!applications.contains(effectiveServiceStr)) {
+                    unHealthyServiceList.add(effectiveServiceStr);
+                    continue;
                 }
 
-                /*int providersSize = providers == null ? 0 : providers.size();
-                providersCount += providersSize;
-                row.add(providersSize == 0 ? "<font color=\"blue\">No provider</font>" : "<a href=\"providers.html?application=" + application + "\">Providers(" + providersSize + ")</a>");
+                List<URL> providers = RegistryContainer.getInstance().getProvidersByApplication(effectiveServiceStr);
+                if (providers == null || providers.size() <= 0) {
+                    unHealthyServiceList.add(effectiveServiceStr);
+                    continue;
+                }
 
-                int consumersSize = consumers == null ? 0 : consumers.size();
-                consumersCount += consumersSize;
-                row.add(consumersSize == 0 ? "<font color=\"blue\">No consumer</font>" : "<a href=\"consumers.html?application=" + application + "\">Consumers(" + consumersSize + ")</a>");
+                healthyServiceList.add(effectiveServiceStr);
+            }
 
-                Set<String> efferents = RegistryContainer.getInstance().getDependencies(application, false);
-                int efferentSize = efferents == null ? 0 : efferents.size();
-                efferentCount += efferentSize;
-                row.add(efferentSize == 0 ? "<font color=\"blue\">No dependency</font>" : "<a href=\"dependencies.html?application=" + application + "\">Depends On(" + efferentSize + ")</a>");
-
-                Set<String> afferents = RegistryContainer.getInstance().getDependencies(application, true);
-                int afferentSize = afferents == null ? 0 : afferents.size();
-                afferentCount += afferentSize;
-                row.add(afferentSize == 0 ? "<font color=\"blue\">No used</font>" : "<a href=\"dependencies.html?application=" + application + "&reverse=true\">Used By(" + afferentSize + ")</a>");
-                rows.add(row);*/
+            if (unHealthyServiceList.size() > 0) {
+                resultJsonObject.put("status", "Yellow");
             }
         }
-        /*return new Page("Applications", "Applications (" + rows.size() + ")",
-                new String[]{"Application Name:", "Owner", "Providers(" + providersCount + ")", "Consumers(" + consumersCount + ")", "Depends On(" + efferentCount + ")", "Used By(" + afferentCount + ")"}, rows);
 
-*/
+        resultJsonObject.put("healthyServiceList", healthyServiceList);
+        if (unHealthyServiceList.size() > 0) {
+            resultJsonObject.put("unHealthyServiceList", unHealthyServiceList);
+        }
 
-
-        System.out.println(JSON.toJSONString(sss));
-
-        Page resultPage = new Page("","","", JSON.toJSONString(sss));
-        return resultPage;
+        return new Page("","","", JSON.toJSONString(resultJsonObject));
     }
 }
