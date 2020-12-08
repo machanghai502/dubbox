@@ -8,3 +8,4 @@ dependencies=com.alibaba.dubbo.monitor.simple.pages.DependenciesPageHandler
 hosts=com.alibaba.dubbo.monitor.simple.pages.HostsPageHandler
 unregister=com.alibaba.dubbo.monitor.simple.pages.UnregisterPageHandler
 unsubscribe=com.alibaba.dubbo.monitor.simple.pages.UnsubscribePageHandler
+health=com.alibaba.dubbo.monitor.simple.pages.HealthPageHandler
